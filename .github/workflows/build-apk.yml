@@ -1,0 +1,99 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sanity check - verify real app code is present
+        run: |
+          echo "== calisma dizini =="
+          pwd
+          ls -la
+          echo "== lib/main.dart ilk 10 satiri =="
+          head -10 lib/main.dart
+          grep -q "KelimeHafizaApp" lib/main.dart || (echo "!!! HATA: lib/main.dart beklenen Kelime Hafiza kodunu icermiyor, yanlis dosya yuklenmis olabilir." && exit 1)
+          echo "OK: dogru proje kodu bulundu."
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generate missing platform folders (android only, without touching app code)
+        run: |
+          if [ ! -d "android" ]; then
+            TMP_SCAFFOLD=$(mktemp -d)
+            flutter create --platforms=android --org com.kelimehafiza --project-name kelime_hafiza "$TMP_SCAFFOLD/scaffold"
+            cp -r "$TMP_SCAFFOLD/scaffold/android" ./android
+            rm -rf "$TMP_SCAFFOLD"
+            echo "android/ klasoru gecici scaffold'dan kopyalandi, lib/ ve pubspec.yaml dokunulmadi."
+          fi
+
+      - name: Opt out of AGP 9 new DSL (Flutter compatibility fix, see flutter/flutter#175688)
+        run: |
+          echo "" >> android/gradle.properties
+          echo "android.newDsl=false" >> android/gradle.properties
+          echo "android.builtInKotlin=false" >> android/gradle.properties
+          echo "--- gradle.properties icerigi ---"
+          cat android/gradle.properties
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Add AdMob test App ID to AndroidManifest.xml
+        run: |
+          python3 << 'PYEOF'
+          import re
+          manifest_path = "android/app/src/main/AndroidManifest.xml"
+          content = open(manifest_path, encoding='utf-8').read()
+          print("--- ONCESI ---")
+          print(content)
+
+          if 'android.permission.INTERNET' not in content:
+              m = re.search(r'<manifest\b[^>]*>', content)
+              content = content[:m.end()] + '\n    <uses-permission android:name="android.permission.INTERNET"/>' + content[m.end():]
+
+          if 'com.google.android.gms.ads.APPLICATION_ID' not in content:
+              m = re.search(r'<application\b[^>]*>', content)
+              meta = '\n        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>'
+              content = content[:m.end()] + meta + content[m.end():]
+
+          open(manifest_path, 'w', encoding='utf-8').write(content)
+          print("--- SONRASI ---")
+          print(content)
+          PYEOF
+          echo "--- XML gecerlilik kontrolu ---"
+          python3 -c "
+          import xml.etree.ElementTree as ET
+          ET.parse('android/app/src/main/AndroidManifest.xml')
+          print('GECERLI XML')
+          "
+
+      - name: Generate app icon from logo
+        run: |
+          dart run flutter_launcher_icons
+          echo "--- uretilen ikon dosyalari ---"
+          find android/app/src/main/res -iname "ic_launcher*"
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kelime-hafiza-apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
