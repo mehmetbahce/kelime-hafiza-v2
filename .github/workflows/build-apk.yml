@@ -89,6 +89,33 @@ jobs:
           echo "--- uretilen ikon dosyalari ---"
           find android/app/src/main/res -iname "ic_launcher*"
 
+      - name: Disable release minification (ProGuard/R8 - AdMob ile crash yapabiliyor)
+        run: |
+          python3 << 'PYEOF'
+          import re
+          for path in ["android/app/build.gradle", "android/app/build.gradle.kts"]:
+              try:
+                  content = open(path).read()
+              except FileNotFoundError:
+                  continue
+              print(f"--- {path} oncesi ---")
+              print(content)
+              if 'isMinifyEnabled' in content or 'minifyEnabled' in content:
+                  print("Zaten bir minify ayari var, dokunulmadi.")
+                  continue
+              m = re.search(r'release\s*\{', content)
+              if m:
+                  is_kts = path.endswith('.kts')
+                  if is_kts:
+                      addition = '\n            isMinifyEnabled = false\n            isShrinkResources = false'
+                  else:
+                      addition = '\n            minifyEnabled false\n            shrinkResources false'
+                  content = content[:m.end()] + addition + content[m.end():]
+                  open(path, 'w').write(content)
+                  print(f"--- {path} sonrasi ---")
+                  print(content)
+          PYEOF
+
       - name: Build release APK
         run: flutter build apk --release
 
