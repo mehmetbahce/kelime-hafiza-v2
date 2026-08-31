@@ -2,18 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/word_card.dart';
 import '../services/api_service.dart';
+import '../services/rewarded_ad_service.dart';
 import '../screens/card_detail_screen.dart';
 
 /// Galeri kutucuğu: 1-5 kelimelik bir GRUBU temsil eder. Kapak görseli
 /// gruptaki ilk kelimenin görselidir; sağ üstte "5" gibi bir rozet varsa
-/// içinde birden fazla kelime olduğunu gösterir. Dokununca CardDetailScreen
-/// açılır ve tüm grup kaydırmalı olarak gösterilir.
+/// içinde birden fazla kelime olduğunu gösterir. Dokununca ÖNCE reklam
+/// gösterilir, izlenince (ya da reklam hazır değilse doğrudan) kart açılır.
 class WordCardTile extends StatelessWidget {
   final List<WordCard> group;
   final VoidCallback onChanged;
   const WordCardTile({super.key, required this.group, required this.onChanged});
 
   WordCard get _cover => group.first;
+
+  void _openCard(BuildContext context) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (_, __, ___) => CardDetailScreen(cards: group),
+      ),
+    );
+  }
+
+  void _handleTap(BuildContext context) {
+    try {
+      RewardedAdService().show(
+        onReward: () => _openCard(context),
+        onNotReady: () => _openCard(context), // reklam hazır değilse karta engel olma
+      );
+    } catch (_) {
+      _openCard(context); // reklam sistemi sorun çıkarırsa yine de kartı aç
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,17 +51,7 @@ class WordCardTile extends StatelessWidget {
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            PageRouteBuilder(
-              opaque: false,
-              barrierColor: Colors.transparent,
-              transitionDuration: const Duration(milliseconds: 220),
-              pageBuilder: (_, __, ___) => CardDetailScreen(cards: group),
-            ),
-          );
-        },
+        onTap: () => _handleTap(context),
         onLongPress: () => _showActions(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

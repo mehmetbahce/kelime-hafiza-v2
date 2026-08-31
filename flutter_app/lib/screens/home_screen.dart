@@ -63,6 +63,18 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> get _categoryNames =>
       _allCards.map((c) => c.categoryName).whereType<String>().toSet().toList()..sort();
 
+  /// Reklamı gösterir, izlenince (ya da reklam hazır değilse) [onProceed]'i çalıştırır.
+  void _openWithAd(BuildContext context, VoidCallback onProceed) {
+    try {
+      RewardedAdService().show(
+        onReward: onProceed,
+        onNotReady: onProceed, // reklam hazır değilse kullanıcıyı bekletme
+      );
+    } catch (_) {
+      onProceed();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -76,46 +88,16 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.ondemand_video_outlined),
-            tooltip: 'Reklam izle',
-            onPressed: () {
-              try {
-                RewardedAdService().show(
-                  onReward: () {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Reklamı izlediğin için teşekkürler! 🎉')),
-                      );
-                    }
-                  },
-                  onNotReady: () {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Reklam hazırlanıyor, birazdan tekrar dene.')),
-                      );
-                    }
-                  },
-                );
-              } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Reklam şu an kullanılamıyor.')),
-                  );
-                }
-              }
-            },
-          ),
-          IconButton(
             icon: const Icon(Icons.school_outlined),
             tooltip: 'Tekrar Modu',
-            onPressed: cards.isEmpty ? null : () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => FlashcardScreen(cards: cards))),
+            onPressed: cards.isEmpty ? null : () => _openWithAd(context,
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => FlashcardScreen(cards: cards)))),
           ),
           IconButton(
             icon: const Icon(Icons.quiz_outlined),
             tooltip: 'Quiz Modu',
-            onPressed: cards.length < 4 ? null : () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => QuizScreen(localCards: cards))),
+            onPressed: cards.length < 4 ? null : () => _openWithAd(context,
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuizScreen(localCards: cards)))),
           ),
         ],
       ),
