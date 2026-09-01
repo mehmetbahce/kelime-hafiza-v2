@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/word_card.dart';
 import '../services/api_service.dart';
+import '../services/rewarded_ad_service.dart';
 
 class QuizScreen extends StatefulWidget {
   final int? categoryId;
@@ -55,18 +56,38 @@ class _QuizScreenState extends State<QuizScreen> {
     }).toList();
   }
 
+  int _answeredCount = 0;
+
   void _select(String option) {
     if (_selected != null) return;
     setState(() => _selected = option);
     final correct = _questions[_index]['correct_answer'] == option;
     if (correct) _score++;
+    _answeredCount++;
     Future.delayed(const Duration(milliseconds: 900), () {
-      if (_index < _questions.length - 1) {
-        setState(() { _index++; _selected = null; });
+      final isLast = _index >= _questions.length - 1;
+      final dueForAd = _answeredCount % 5 == 0;
+      void proceed() {
+        if (isLast) {
+          _showResult();
+        } else {
+          setState(() { _index++; _selected = null; });
+        }
+      }
+      if (dueForAd) {
+        _showAdThen(proceed);
       } else {
-        _showResult();
+        proceed();
       }
     });
+  }
+
+  void _showAdThen(VoidCallback onDone) {
+    try {
+      RewardedAdService().show(onReward: onDone, onNotReady: onDone);
+    } catch (_) {
+      onDone();
+    }
   }
 
   void _showResult() {

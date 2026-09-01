@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/word_card.dart';
 import '../services/api_service.dart';
 import '../services/tts_service.dart';
+import '../services/rewarded_ad_service.dart';
 
 class FlashcardScreen extends StatefulWidget {
   final List<WordCard> cards;
@@ -49,7 +50,20 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
       await _api.submitReview(card.id, quality);
     }
     _reviewedCount++;
-    _goNext();
+    // Her 5 kartta bir reklam göster, sonra devam et.
+    if (_reviewedCount % 5 == 0) {
+      _showAdThen(_goNext);
+    } else {
+      _goNext();
+    }
+  }
+
+  void _showAdThen(VoidCallback onDone) {
+    try {
+      RewardedAdService().show(onReward: onDone, onNotReady: onDone);
+    } catch (_) {
+      onDone();
+    }
   }
 
   void _goNext() {
